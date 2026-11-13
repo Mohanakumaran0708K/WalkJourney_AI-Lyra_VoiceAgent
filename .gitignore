@@ -21,3 +21,23 @@ Thumbs.db
 .vscode/
 .idea/
 *.log
+
+# Machine Learning Models
+*.pt
+*.onnx
+*.engine
+
+# Datasets
+MOT17/
+**/MOT17/
+
+# Backups and archives
+backend_backup/
+backend.zip
+
+# Generated detection outputs
+backend/mot17_detection_result.jpg
+
+# Practice files
+WalkJourney_Practice/
+backend/me/

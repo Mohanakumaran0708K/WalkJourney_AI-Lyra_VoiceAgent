@@ -1,28 +1,54 @@
-import cv2
 
-from app.colnav.camera import Camera
 from app.colnav.pipeline import ColNavPipeline
+from app.colnav.schemas import (
+    DetectionResult,
+    BoundingBox
+)
 
 
-camera = Camera()
-pipeline = ColNavPipeline()
+# Create a fake detector for testing
+class FakeDetector:
 
-try:
+    def detect(self, frame):
 
-    camera.open()
+        return [
+            DetectionResult(
+                object_id=None,
+                class_name="person",
+                confidence=0.95,
+                bounding_box=BoundingBox(
+                    x1=100,
+                    y1=150,
+                    x2=200,
+                    y2=450
+                )
+            )
+        ]
 
-    while True:
 
-        frame = camera.read_frame()
+# Inject fake detector into pipeline
+fake_detector = FakeDetector()
 
-        result = pipeline.process_frame(frame)
+pipeline = ColNavPipeline(detector=fake_detector)
 
-        cv2.imshow("WalkJourney AI - ColNav", frame)
+# Create a dummy image frame
+import numpy as np
 
-        if cv2.waitKey(1) & 0xFF == ord("q"):
-            break
+frame = np.zeros((480, 640, 3), dtype=np.uint8)
 
-finally:
+# Process frame
+result = pipeline.process_frame(
+    frame,
+    source="video"
+)
 
-    camera.release()
-    cv2.destroyAllWindows()
+# Display results
+print("\n--- Pipeline Test Results ---")
+print("Frame ID:", result.frame_id)
+print("Status:", result.status)
+print("Total detections:", len(result.detections))
+
+for detection in result.detections:
+    print("Class:", detection.class_name)
+    print("Confidence:", detection.confidence)
+    print("Bounding Box:", detection.bounding_box)
