@@ -34,6 +34,27 @@ class TrackingResult(BaseModel):
     movement_status: str = "unknown"
 
 
+# 3.1 Kalman Estimated State
+class EstimatedMotionState(BaseModel):
+    track_id: int
+    class_name: str
+
+    # Estimated image-plane position
+    x: float
+    y: float
+
+    # Estimated image-plane velocity (pixels/second)
+    vx: float
+    vy: float
+
+    # 4x4 state covariance matrix
+    covariance: List[List[float]]
+
+    # Whether this state came from a measurement or prediction
+    status: Literal["observed", "predicted"] = "observed"
+
+
+
 # 4. Trajectory Result
 class TrajectoryResult(BaseModel):
     track_id: int
@@ -63,6 +84,9 @@ class ColNavResult(BaseModel):
     status: str
     detections: List[DetectionResult] = Field(default_factory=list)
     tracking: List[TrackingResult] = Field(default_factory=list)
+    estimated_states: List[EstimatedMotionState] = Field(
+    default_factory=list
+)
     trajectories: List[TrajectoryResult] = Field(default_factory=list)
     risk: Optional[RiskAssessment] = None
     navigation: Optional[NavigationResult] = None
