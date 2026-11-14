@@ -53,6 +53,16 @@ class EstimatedMotionState(BaseModel):
     # Whether this state came from a measurement or prediction
     status: Literal["observed", "predicted"] = "observed"
 
+        # Estimated movement direction in image-plane coordinates
+    movement_direction: Literal[
+        "left",
+        "right",
+        "up",
+        "down",
+        "stationary",
+        "unknown"
+    ] = "unknown"
+
 
 
 # 4. Trajectory Result

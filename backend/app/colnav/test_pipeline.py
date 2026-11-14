@@ -1,6 +1,6 @@
 
 import numpy as np
-
+from datetime import datetime, timedelta
 from app.colnav.pipeline import ColNavPipeline
 from app.colnav.schemas import DetectionResult, BoundingBox
 
@@ -139,3 +139,79 @@ def test_pipeline_predicts_temporarily_missing_pedestrian():
     assert prediction.track_id == 7
     assert prediction.status == "predicted"
     assert prediction.covariance[0][0] > 0
+
+class MovingDetector:
+    def __init__(self):
+        self.call_count = 0
+
+    def detect(self, frame):
+        self.call_count += 1
+
+        x_position = 100 + (self.call_count - 1) * 20
+
+        return [
+            DetectionResult(
+                object_id=7,
+                class_name="person",
+                confidence=0.95,
+                bounding_box=BoundingBox(
+                    x1=x_position,
+                    y1=150,
+                    x2=x_position + 100,
+                    y2=450
+                )
+            )
+        ]
+
+
+def test_pipeline_initial_movement_is_unknown():
+    pipeline = ColNavPipeline(detector=FakeDetector())
+
+    frame = np.zeros((480, 640, 3), dtype=np.uint8)
+
+    result = pipeline.process_frame(frame, source="video")
+
+    assert len(result.estimated_states) == 1
+    assert result.estimated_states[0].movement_direction == "unknown"
+
+
+def test_pipeline_classifies_rightward_movement():
+    pipeline = ColNavPipeline(detector=MovingDetector())
+
+    frame = np.zeros((480, 640, 3), dtype=np.uint8)
+
+    timestamp = datetime(2026, 11, 14, 10, 0, 0)
+
+    pipeline.process_frame(
+        frame,
+        source="video",
+        timestamp=timestamp
+    )
+
+    result = pipeline.process_frame(
+        frame,
+        source="video",
+        timestamp=timestamp + timedelta(seconds=0.2)
+    )
+
+    estimated = result.estimated_states[0]
+
+    assert estimated.status == "observed"
+    assert estimated.movement_direction == "right"
+
+
+def test_pipeline_preserves_movement_during_missing_detection():
+    pipeline = ColNavPipeline(
+        detector=IntermittentDetector()
+    )
+
+    frame = np.zeros((480, 640, 3), dtype=np.uint8)
+
+    first_result = pipeline.process_frame(frame, source="video")
+
+    second_result = pipeline.process_frame(frame, source="video")
+
+    assert first_result.estimated_states[0].movement_direction == "unknown"
+
+    assert second_result.estimated_states[0].status == "predicted"
+    assert second_result.estimated_states[0].movement_direction == "unknown"

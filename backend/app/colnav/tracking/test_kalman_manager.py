@@ -164,3 +164,98 @@ def test_prediction_skips_currently_observed_tracks():
     )
 
     assert len(predictions) == 0
+
+def test_first_observation_has_unknown_movement():
+    manager = KalmanFilterManager()
+    timestamp = datetime(2026, 11, 14, 10, 0, 0)
+
+    results = manager.update(
+        [make_track(7, 100, 200)],
+        timestamp
+    )
+
+    assert results[0].movement_direction == "unknown"
+
+
+def test_manager_classifies_rightward_movement():
+    manager = KalmanFilterManager()
+    timestamp = datetime(2026, 11, 14, 10, 0, 0)
+
+    manager.update(
+        [make_track(7, 100, 200)],
+        timestamp
+    )
+
+    results = manager.update(
+        [make_track(7, 120, 200)],
+        timestamp + timedelta(seconds=0.2)
+    )
+
+    assert results[0].movement_direction == "right"
+
+
+def test_missing_track_retains_last_movement():
+    manager = KalmanFilterManager()
+    timestamp = datetime(2026, 11, 14, 10, 0, 0)
+
+    manager.update(
+        [make_track(7, 100, 200)],
+        timestamp
+    )
+
+    observed = manager.update(
+        [make_track(7, 120, 200)],
+        timestamp + timedelta(seconds=0.2)
+    )
+
+    previous_direction = observed[0].movement_direction
+
+    predictions = manager.predict_missing(
+        timestamp + timedelta(seconds=0.3)
+    )
+
+    assert len(predictions) == 1
+    assert predictions[0].status == "predicted"
+    assert predictions[0].movement_direction == previous_direction
+
+
+def test_stale_cleanup_removes_movement_history():
+    manager = KalmanFilterManager()
+    timestamp = datetime(2026, 11, 14, 10, 0, 0)
+
+    manager.update(
+        [make_track(7, 100, 200)],
+        timestamp
+    )
+
+    manager.update(
+        [make_track(7, 120, 200)],
+        timestamp + timedelta(seconds=0.2)
+    )
+
+    manager.remove_stale_filters(
+        timestamp + timedelta(seconds=3)
+    )
+
+    assert 7 not in manager.observation_counts
+    assert 7 not in manager.last_movement
+
+
+def test_clear_resets_movement_history():
+    manager = KalmanFilterManager()
+    timestamp = datetime(2026, 11, 14, 10, 0, 0)
+
+    manager.update(
+        [make_track(7, 100, 200)],
+        timestamp
+    )
+
+    manager.update(
+        [make_track(7, 120, 200)],
+        timestamp + timedelta(seconds=0.2)
+    )
+
+    manager.clear()
+
+    assert manager.observation_counts == {}
+    assert manager.last_movement == {}

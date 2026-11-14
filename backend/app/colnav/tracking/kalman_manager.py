@@ -4,9 +4,10 @@ from typing import Dict, List, Optional, Set
 
 from app.colnav.schemas import (
     EstimatedMotionState,
-    TrackingResult
+    TrackingResult,
 )
 from app.colnav.tracking.kalman import KalmanFilterCV
+from app.colnav.tracking.movement import MovementClassifier
 
 
 class KalmanFilterManager:
@@ -15,7 +16,8 @@ class KalmanFilterManager:
         self,
         process_noise: float = 1.0,
         measurement_noise: float = 10.0,
-        stale_timeout_seconds: float = 2.0
+        stale_timeout_seconds: float = 2.0,
+        velocity_threshold: float = 5.0,
     ):
         if stale_timeout_seconds <= 0:
             raise ValueError("stale_timeout_seconds must be positive")
@@ -27,9 +29,17 @@ class KalmanFilterManager:
             seconds=stale_timeout_seconds
         )
 
+        self.movement_classifier = MovementClassifier(
+            velocity_threshold=velocity_threshold
+        )
+
         self.filters: Dict[int, KalmanFilterCV] = {}
         self.last_seen: Dict[int, datetime] = {}
         self.track_classes: Dict[int, str] = {}
+
+        # Per-track observation and movement history
+        self.observation_counts: Dict[int, int] = {}
+        self.last_movement: Dict[int, str] = {}
 
     def update(
         self,
@@ -48,6 +58,8 @@ class KalmanFilterManager:
                     measurement_noise=self.measurement_noise
                 )
 
+                self.observation_counts[track_id] = 0
+
             kalman_filter = self.filters[track_id]
 
             state = kalman_filter.update(
@@ -59,6 +71,18 @@ class KalmanFilterManager:
             self.last_seen[track_id] = timestamp
             self.track_classes[track_id] = track.class_name
 
+            # Update the number of actual observations.
+            self.observation_counts[track_id] += 1
+
+            # Classify movement using estimated velocity.
+            movement_direction = self.movement_classifier.classify(
+                vx=state["vx"],
+                vy=state["vy"],
+                observation_count=self.observation_counts[track_id]
+            )
+
+            self.last_movement[track_id] = movement_direction
+
             estimated_states.append(
                 EstimatedMotionState(
                     track_id=track_id,
@@ -68,7 +92,8 @@ class KalmanFilterManager:
                     vx=state["vx"],
                     vy=state["vy"],
                     covariance=state["covariance"].tolist(),
-                    status="observed"
+                    status="observed",
+                    movement_direction=movement_direction
                 )
             )
 
@@ -120,7 +145,10 @@ class KalmanFilterManager:
                     vx=state["vx"],
                     vy=state["vy"],
                     covariance=state["covariance"].tolist(),
-                    status="predicted"
+                    status="predicted",
+                    movement_direction=self.last_movement.get(
+                        track_id, "unknown"
+                    )
                 )
             )
 
@@ -138,6 +166,8 @@ class KalmanFilterManager:
             self.filters.pop(track_id, None)
             self.last_seen.pop(track_id, None)
             self.track_classes.pop(track_id, None)
+            self.observation_counts.pop(track_id, None)
+            self.last_movement.pop(track_id, None)
 
     def get_filter(
         self,
@@ -150,3 +180,5 @@ class KalmanFilterManager:
         self.filters.clear()
         self.last_seen.clear()
         self.track_classes.clear()
+        self.observation_counts.clear()
+        self.last_movement.clear()

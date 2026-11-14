@@ -1,6 +1,6 @@
 
 from datetime import datetime
-
+from typing import Optional
 from app.colnav.schemas import ColNavResult, FrameInput
 from app.colnav.detection.detector import YOLODetector
 from app.colnav.tracking.history import PositionHistory
@@ -33,7 +33,12 @@ class ColNavPipeline:
             else KalmanFilterManager()
         )
 
-    def process_frame(self, frame, source="webcam"):
+    def process_frame(
+    self,
+    frame,
+    source="webcam",
+    timestamp: Optional[datetime] = None,
+):
 
         if frame is None:
             raise ValueError("Invalid frame received")
@@ -44,7 +49,7 @@ class ColNavPipeline:
 
         frame_input = FrameInput(
             frame_id=self.frame_count,
-            timestamp=datetime.now(),
+            timestamp=timestamp if timestamp is not None else datetime.now(),
             source=source,
             width=width,
             height=height
